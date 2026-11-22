@@ -380,6 +380,14 @@
       };
 
       // Admin actions
+      const moveChapter = (index, direction) => {
+        const targetIndex = index + direction;
+        if (targetIndex < 0 || targetIndex >= chaptersForm.length) return;
+        const updated = [...chaptersForm];
+        [updated[index], updated[targetIndex]] = [updated[targetIndex], updated[index]];
+        setChaptersForm(updated);
+      };
+
       const handleSaveBook = (e) => {
         e.preventDefault();
         if (!bookForm.title.trim()) {
@@ -998,13 +1006,42 @@
                             className="flex-1 px-3 py-2 rounded-xl border border-stone-300 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400 bg-white"
                           />
                           {chaptersForm.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => setChaptersForm(chaptersForm.filter((_, i) => i !== idx))}
-                              className="text-red-500 hover:text-red-700 p-2 text-xs font-bold self-end sm:self-center"
-                            >
-                              ✕
-                            </button>
+                            <div className="flex items-center space-x-1 self-end sm:self-center">
+                              <button
+                                type="button"
+                                onClick={() => moveChapter(idx, -1)}
+                                disabled={idx === 0}
+                                title="Hoofdstuk omhoog verplaatsen"
+                                className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                                  idx === 0
+                                    ? 'text-stone-300 cursor-not-allowed'
+                                    : 'text-stone-600 hover:bg-stone-200 hover:text-stone-900'
+                                }`}
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => moveChapter(idx, 1)}
+                                disabled={idx === chaptersForm.length - 1}
+                                title="Hoofdstuk omlaag verplaatsen"
+                                className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                                  idx === chaptersForm.length - 1
+                                    ? 'text-stone-300 cursor-not-allowed'
+                                    : 'text-stone-600 hover:bg-stone-200 hover:text-stone-900'
+                                }`}
+                              >
+                                ↓
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setChaptersForm(chaptersForm.filter((_, i) => i !== idx))}
+                                title="Hoofdstuk verwijderen"
+                                className="text-red-500 hover:bg-red-50 hover:text-red-700 px-2 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                              >
+                                ✕
+                              </button>
+                            </div>
                           )}
                         </div>
                       ))}
