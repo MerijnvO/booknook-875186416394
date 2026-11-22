@@ -4,7 +4,7 @@
     "title": "Veertien gemiste oproepen van Cruijff",
     "narrator": "Michel van Egmond",
     "description": "",
-    "emoji": "📚",
+    "emoji": "⚽",
     "coverColor": "from-amber-400 to-orange-500",
     "chapters": [
       {
@@ -28,7 +28,7 @@
       {
         "id": "c-1795364607360-3",
         "title": "Hoofdstuk 3",
-        "url": "https://github.com/MerijnvO/booknook-875186416394/releases/download/v1/cruijff-hoofdstuk-03.mp3",
+        "url": "https://github.com/MerijnvO/booknook-875186416394/raw/refs/heads/main/cruijff-hoofdstuk-03.mp3",
         "duration": "50:00"
       },
       {
@@ -50,13 +50,13 @@
     "title": "De zonderlinge avonturen van het geniale bommenmeisje",
     "narrator": "Jonas Jonasson",
     "description": "",
-    "emoji": "📚",
+    "emoji": "💣",
     "coverColor": "from-indigo-400 to-purple-600",
     "chapters": [
       {
         "id": "c-1795364739339-0",
         "title": "Hoofdstuk 1",
-        "url": "https://github.com/MerijnvO/booknook-875186416394/releases/download/v1/zonderling-hoofdstuk-01.mp3",
+        "url": "https://github.com/MerijnvO/booknook-875186416394/raw/refs/heads/main/zonderling-hoofdstuk-01.mp3",
         "duration": "50:40"
       },
       {
@@ -68,7 +68,7 @@
       {
         "id": "c-1795364739339-2",
         "title": "Hoofdstuk 3",
-        "url": "https://github.com/MerijnvO/booknook-875186416394/releases/download/v1/zonderling-hoofdstuk-03.mp3",
+        "url": "https://github.com/MerijnvO/booknook-875186416394/raw/refs/heads/main/zonderling-hoofdstuk-03.mp3",
         "duration": "51:49"
       },
       {
@@ -79,21 +79,27 @@
       },
       {
         "id": "c-1795364739339-4",
-        "title": "Hoofdstuk 5",
-        "url": "https://github.com/MerijnvO/booknook-875186416394/releases/download/v1/zonderling-hoofdstuk-05.mp3",
+        "title": "Hoofdstuk 5 (deel 1)",
+        "url": "https://github.com/MerijnvO/booknook-875186416394/raw/refs/heads/main/zonderling-hoofdstuk-05-1.mp3",
         "duration": "53:44"
       },
       {
-        "id": "c-1795364739339-5",
-        "title": "Hoofdstuk 6",
-        "url": "https://github.com/MerijnvO/booknook-875186416394/raw/refs/heads/main/zonderling-hoofdstuk-06.mp3",
-        "duration": "20:15"
+        "id": "c-1795366598902-5",
+        "title": "Hoofdstuk 5 (deel 2)",
+        "url": "https://github.com/MerijnvO/booknook-875186416394/raw/refs/heads/main/zonderling-hoofdstuk-05-2.mp3",
+        "duration": ""
       },
       {
-        "id": "c-1795364739339-6",
+        "id": "c-1795366598902-6",
+        "title": "Hoofdstuk 6",
+        "url": "https://github.com/MerijnvO/booknook-875186416394/raw/refs/heads/main/zonderling-hoofdstuk-06.mp3",
+        "duration": ""
+      },
+      {
+        "id": "c-1795366598902-7",
         "title": "Hoofdstuk 7",
-        "url": "https://github.com/MerijnvO/booknook-875186416394/releases/download/v1/zonderling-hoofdstuk-07.mp3",
-        "duration": "43:13"
+        "url": "https://github.com/MerijnvO/booknook-875186416394/raw/refs/heads/main/zonderling-hoofdstuk-07.mp3",
+        "duration": ""
       }
     ]
   }
