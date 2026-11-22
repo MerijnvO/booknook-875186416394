@@ -11,6 +11,11 @@
   <meta name="apple-mobile-web-app-title" content="BookNook" />
   <meta name="theme-color" content="#FDFBF7" />
 
+  <!-- Discourage stale browser caching of index.html -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+
   <!-- Google Fonts: Inter (UI) & Merriweather (Cozy Bookish Serif) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -99,6 +104,16 @@
       return `${mins}:${remainSecs < 10 ? '0' : ''}${remainSecs}`;
     };
 
+    // Parse mm:ss (or hh:mm:ss) duration string into total seconds
+    const parseDurationToSeconds = (durationStr) => {
+      if (!durationStr || typeof durationStr !== 'string') return 0;
+      const parts = durationStr.split(':').map(Number);
+      if (parts.some(isNaN)) return 0;
+      if (parts.length === 2) return parts[0] * 60 + parts[1];
+      if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+      return 0;
+    };
+
     function App() {
       const [books, setBooks] = useState(() => {
         try {
@@ -132,6 +147,8 @@
       const [playbackRate, setPlaybackRate] = useState(1);
       const [notification, setNotification] = useState(null);
       const [syncStatus, setSyncStatus] = useState('');
+      const [isSyncing, setIsSyncing] = useState(false);
+      const [progressVersion, setProgressVersion] = useState(0);
 
       // Admin form state
       const [editingBookId, setEditingBookId] = useState(null);
@@ -146,37 +163,66 @@
 
       const audioRef = useRef(null);
       const pendingAutoPlayRef = useRef(false);
+      const lastFetchTimeRef = useRef(0);
 
       const showNotification = (msg) => {
         setNotification(msg);
         setTimeout(() => setNotification(null), 3500);
       };
 
-      // Automatically load shared books.json from GitHub Pages if present
+      // Fetch latest books.json bypassing browser & CDN caches
+      const fetchSharedBooks = async (isManual = false) => {
+        const now = Date.now();
+        // Avoid rapid duplicate background checks (allow manual refresh anytime)
+        if (!isManual && now - lastFetchTimeRef.current < 15000) return;
+        lastFetchTimeRef.current = now;
+
+        if (isManual) setIsSyncing(true);
+        try {
+          const response = await fetch(`./books.json?t=${now}`, {
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache' }
+          });
+          if (!response.ok) {
+            if (isManual) showNotification('Geen gedeelde boekenlijst gevonden.');
+            return;
+          }
+          const remoteBooks = await response.json();
+          if (!Array.isArray(remoteBooks) || remoteBooks.length === 0) return;
+
+          const remoteStr = JSON.stringify(remoteBooks);
+          const lastSyncedStr = localStorage.getItem('booknook_last_synced_json');
+
+          // Update local library whenever a newer books.json is published on GitHub
+          if (remoteStr !== lastSyncedStr) {
+            setBooks(remoteBooks);
+            localStorage.setItem('booknook_books', remoteStr);
+            localStorage.setItem('booknook_last_synced_json', remoteStr);
+            setSyncStatus('Boekenlijst bijgewerkt');
+            showNotification('Nieuwe boeken of hoofdstukken geladen!');
+          } else if (isManual) {
+            setSyncStatus('Boekenlijst is up-to-date');
+            showNotification('Boekenlijst is helemaal up-to-date!');
+          }
+        } catch (e) {
+          if (isManual) showNotification('Kon boekenlijst niet verversen. Controleer internet.');
+        } finally {
+          if (isManual) setIsSyncing(false);
+        }
+      };
+
+      // Automatically check for new books on load AND whenever parents reopen/return to the app
       useEffect(() => {
-        const fetchSharedBooks = async () => {
-          try {
-            const response = await fetch(`./books.json?t=${Date.now()}`, { cache: 'no-store' });
-            if (!response.ok) return;
-            const remoteBooks = await response.json();
-            if (!Array.isArray(remoteBooks) || remoteBooks.length === 0) return;
+        fetchSharedBooks(false);
 
-            const remoteStr = JSON.stringify(remoteBooks);
-            const lastSyncedStr = localStorage.getItem('booknook_last_synced_json');
-
-            // Update local library whenever a newer books.json is published on GitHub
-            if (remoteStr !== lastSyncedStr) {
-              setBooks(remoteBooks);
-              localStorage.setItem('booknook_books', remoteStr);
-              localStorage.setItem('booknook_last_synced_json', remoteStr);
-              setSyncStatus('Boekenlijst gesynchroniseerd');
-            }
-          } catch (e) {
-            // Silently ignore if running locally without a books.json file yet
+        const handleVisibilityChange = () => {
+          if (document.visibilityState === 'visible') {
+            fetchSharedBooks(false);
           }
         };
 
-        fetchSharedBooks();
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
       }, []);
 
       // Keep localStorage updated whenever books change
@@ -253,6 +299,7 @@
           audioRef.current.playbackRate = playbackRate;
           if (pendingAutoPlayRef.current) {
             pendingAutoPlayRef.current = false;
+            audioRef.current.load();
             audioRef.current.play().then(() => {
               setIsPlaying(true);
             }).catch(() => {
@@ -359,6 +406,42 @@
       };
 
       const activeBook = books.find((b) => b.id === selectedBookId) || books[0];
+
+      // Mark finished chapter as completed and automatically play the next chapter
+      const handleChapterEnded = () => {
+        if (!currentChapter) return;
+
+        // Save completed status for this profile and clear saved midpoint so replaying starts at 0:00
+        localStorage.setItem(`booknook_done_${activeProfile}_${currentChapter.id}`, 'true');
+        localStorage.removeItem(`booknook_prog_${activeProfile}_${currentChapter.id}`);
+
+        if (activeBook && activeBook.chapters) {
+          const currentIndex = activeBook.chapters.findIndex((c) => c.id === currentChapter.id);
+          if (currentIndex !== -1 && currentIndex + 1 < activeBook.chapters.length) {
+            const nextChapter = activeBook.chapters[currentIndex + 1];
+            pendingAutoPlayRef.current = true;
+            setCurrentChapter(nextChapter);
+            showNotification(`Volgend hoofdstuk: ${nextChapter.title}`);
+            return;
+          }
+        }
+
+        setIsPlaying(false);
+        showNotification('Einde van het boek bereikt!');
+      };
+
+      // Unmark a finished chapter so it appears unplayed again
+      const handleUnmarkFinished = (e, chap) => {
+        e.stopPropagation();
+        localStorage.removeItem(`booknook_done_${activeProfile}_${chap.id}`);
+        localStorage.removeItem(`booknook_prog_${activeProfile}_${chap.id}`);
+        if (currentChapter?.id === chap.id && audioRef.current) {
+          audioRef.current.currentTime = 0;
+          setCurrentTime(0);
+        }
+        setProgressVersion((v) => v + 1);
+        showNotification(`"${chap.title}" gemarkeerd als niet-afgespeeld`);
+      };
 
       // Download books.json for uploading to GitHub Pages
       const handleExportBooksJson = () => {
@@ -510,13 +593,14 @@
               src={normalizeAudioUrl(currentChapter.url)}
               preload="metadata"
               onTimeUpdate={handleTimeUpdate}
-              onEnded={() => setIsPlaying(false)}
+              onEnded={handleChapterEnded}
               onError={() => {
                 setIsPlaying(false);
                 showNotification('Audio kon niet worden geladen. Controleer de MP3 link.');
               }}
               onLoadedMetadata={() => {
                 if (audioRef.current) {
+                  audioRef.current.playbackRate = playbackRate;
                   const realDuration = audioRef.current.duration;
                   setDuration(realDuration);
 
@@ -537,7 +621,7 @@
                   const savedTime = localStorage.getItem(`booknook_prog_${activeProfile}_${currentChapter.id}`);
                   if (savedTime) {
                     const parsed = parseFloat(savedTime);
-                    if (!isNaN(parsed) && parsed < realDuration) {
+                    if (!isNaN(parsed) && parsed < realDuration - 2) {
                       audioRef.current.currentTime = parsed;
                       setCurrentTime(parsed);
                     }
@@ -690,16 +774,28 @@
               <div className="space-y-8">
                 {/* Book Library Grid */}
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <h2 className="text-lg font-serif font-bold text-stone-900 flex items-center space-x-2">
                       <span>📚</span>
                       <span>Kies een Luisterboek</span>
                     </h2>
-                    {syncStatus && (
-                      <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                        ✓ {syncStatus}
-                      </span>
-                    )}
+                    <div className="flex items-center space-x-2">
+                      {syncStatus && (
+                        <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                          ✓ {syncStatus}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => fetchSharedBooks(true)}
+                        disabled={isSyncing}
+                        title="Controleer op nieuwe boeken en hoofdstukken"
+                        className="text-xs font-medium text-stone-600 hover:text-amber-900 bg-white hover:bg-amber-50 border border-stone-200 px-3 py-1.5 rounded-xl shadow-sm transition-colors flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <span className={isSyncing ? 'animate-spin inline-block' : ''}>🔄</span>
+                        <span>{isSyncing ? 'Laden...' : 'Ververs'}</span>
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -769,6 +865,11 @@
                         {activeBook.chapters.map((chap, idx) => {
                           const isCurrentChap = currentChapter?.id === chap.id;
                           const savedSec = parseFloat(localStorage.getItem(`booknook_prog_${activeProfile}_${chap.id}`) || '0');
+                          const chapDurSec = parseDurationToSeconds(chap.duration);
+                          const isFinished =
+                            localStorage.getItem(`booknook_done_${activeProfile}_${chap.id}`) === 'true' ||
+                            (chapDurSec > 0 && savedSec >= chapDurSec - 2);
+
                           return (
                             <div
                               key={chap.id}
@@ -776,6 +877,11 @@
                                 if (isCurrentChap) {
                                   togglePlay();
                                 } else {
+                                  // If replaying a completed chapter, reset its saved position to start from 0:00
+                                  if (isFinished) {
+                                    localStorage.removeItem(`booknook_prog_${activeProfile}_${chap.id}`);
+                                    localStorage.removeItem(`booknook_done_${activeProfile}_${chap.id}`);
+                                  }
                                   pendingAutoPlayRef.current = true;
                                   setCurrentChapter(chap);
                                 }
@@ -802,7 +908,27 @@
                                         Duur: {chap.duration}
                                       </span>
                                     )}
-                                    {savedSec > 5 && !isCurrentChap && (
+                                    {isFinished && (
+                                      <>
+                                        {!isCurrentChap && (
+                                          <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                                            ✓ Afgespeeld
+                                          </span>
+                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={(e) => handleUnmarkFinished(e, chap)}
+                                          className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full transition-colors cursor-pointer ${
+                                            isCurrentChap
+                                              ? 'bg-white/20 hover:bg-white/30 text-white'
+                                              : 'bg-stone-200/80 hover:bg-stone-300 text-stone-700'
+                                          }`}
+                                        >
+                                          Markeer als niet-afgespeeld
+                                        </button>
+                                      </>
+                                    )}
+                                    {!isCurrentChap && !isFinished && savedSec > 5 && (
                                       <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
                                         Gebleven bij {formatTime(savedSec)}
                                       </span>
@@ -813,7 +939,9 @@
                               <div className={`text-xs font-medium px-3 py-1.5 rounded-full shrink-0 ml-2 ${
                                 isCurrentChap ? 'bg-white/20 text-white' : 'bg-stone-200/70 text-stone-700'
                               }`}>
-                                {isCurrentChap ? (isPlaying ? 'Afspelen' : 'Gepauzeerd') : (savedSec > 5 ? 'Hervat' : 'Luister')}
+                                {isCurrentChap
+                                  ? (isPlaying ? 'Afspelen' : 'Gepauzeerd')
+                                  : (isFinished ? 'Opnieuw' : (savedSec > 5 ? 'Hervat' : 'Luister'))}
                               </div>
                             </div>
                           );
